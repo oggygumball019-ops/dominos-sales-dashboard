@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Domino's Pizza Chennai Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f8fafc; /* Clean Light/White background */
+      color: #0f172a;
+      margin: 0;
+      padding: 24px;
+    }
+    h1 { 
+      margin-top: 0; 
+      font-size: 1.8rem; 
+      color: #0f172a;
+    }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      background: #ffffff;
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      border: 1px solid #e2e8f0;
+    }
+    label {
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: #334155;
+    }
+    select {
+      background: #f1f5f9;
+      color: #0f172a;
+      border: 1px solid #cbd5e1;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      margin-left: 6px;
+      outline: none;
+    }
+    select:focus {
+      border-color: #0284c7;
+    }
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .kpi-card {
+      background: #ffffff;
+      padding: 20px;
+      border-radius: 8px;
+      border-left: 5px solid #e11d48;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      border-top: 1px solid #e2e8f0;
+      border-right: 1px solid #e2e8f0;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .kpi-card h3 { 
+      margin: 0 0 8px 0; 
+      font-size: 0.8rem; 
+      color: #64748b; 
+      text-transform: uppercase; 
+      letter-spacing: 0.5px;
+    }
+    .kpi-card .value { 
+      font-size: 1.8rem; 
+      font-weight: bold; 
+      color: #0f172a;
+    }
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      gap: 24px;
+    }
+    .chart-box {
+      background: #ffffff;
+      padding: 20px;
+      border-radius: 8px;
+      height: 320px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      border: 1px solid #e2e8f0;
+    }
+    .chart-box h2 { 
+      margin-top: 0; 
+      font-size: 1rem; 
+      color: #334155; 
+    }
+  </style>
+</head>
+<body>
+
+  <h1>🍕 Domino's Pizza Analytics Dashboard (Chennai Outlets)</h1>
+
+  <div class="controls">
+    <label>Area (Chennai):
+      <select id="areaFilter" onchange="updateDashboard()">
+        <option value="ALL">All Chennai Outlets</option>
+        <option value="Velachery">Velachery</option>
+        <option value="Anna Nagar">Anna Nagar</option>
+        <option value="T. Nagar">T. Nagar</option>
+        <option value="OMR (Kandanchavadi)">OMR (Kandanchavadi)</option>
+        <option value="Adyar">Adyar</option>
+        <option value="Nungambakkam">Nungambakkam</option>
+        <option value="Tambaram">Tambaram</option>
+      </select>
+    </label>
+    <label>Category:
+      <select id="catFilter" onchange="updateDashboard()">
+        <option value="ALL">All Categories</option>
+        <option value="Classic">Classic</option>
+        <option value="Chicken">Chicken</option>
+        <option value="Veggie">Veggie</option>
+      </select>
+    </label>
+    <label>Size:
+      <select id="sizeFilter" onchange="updateDashboard()">
+        <option value="ALL">All Sizes</option>
+        <option value="S">Small (S)</option>
+        <option value="M">Medium (M)</option>
+        <option value="L">Large (L)</option>
+      </select>
+    </label>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <h3>Total Revenue</h3>
+      <div class="value" id="kpiRevenue">₹0.00</div>
+    </div>
+    <div class="kpi-card">
+      <h3>Total Orders</h3>
+      <div class="value" id="kpiOrders">0</div>
+    </div>
+    <div class="kpi-card">
+      <h3>Avg Order Value</h3>
+      <div class="value" id="kpiAOV">₹0.00</div>
+    </div>
+  </div>
+
+  <div class="charts-grid">
+    <div class="chart-box">
+      <h2>Hourly Demand (Rush Hours)</h2>
+      <canvas id="rushChart"></canvas>
+    </div>
+    <div class="chart-box">
+      <h2>Revenue Share by Chennai Area</h2>
+      <canvas id="areaChart"></canvas>
+    </div>
+  </div>
+
+  <script src="data.js"></script>
+
+  <script>
+    let rushChartObj = null;
+    let areaChartObj = null;
+
+    function processData() {
+      const area = document.getElementById('areaFilter').value;
+      const cat = document.getElementById('catFilter').value;
+      const size = document.getElementById('sizeFilter').value;
+
+      const filtered = rawSalesData.filter(item => {
+        const aMatch = (area === 'ALL' || item.area === area);
+        const cMatch = (cat === 'ALL' || item.category === cat);
+        const sMatch = (size === 'ALL' || item.size === size);
+        return aMatch && cMatch && sMatch;
+      });
+
+      const totalRev = filtered.reduce((acc, i) => acc + i.price, 0);
+      const totalOrders = new Set(filtered.map(i => i.order_id)).size;
+      const aov = totalOrders > 0 ? (totalRev / totalOrders) : 0;
+
+      document.getElementById('kpiRevenue').innerText = `₹${totalRev.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+      document.getElementById('kpiOrders').innerText = totalOrders.toLocaleString('en-IN');
+      document.getElementById('kpiAOV').innerText = `₹${aov.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
+      const hoursMap = {};
+      const areaMap = {};
+
+      filtered.forEach(i => {
+        hoursMap[i.hour] = (hoursMap[i.hour] || 0) + 1;
+        areaMap[i.area] = (areaMap[i.area] || 0) + i.price;
+      });
+
+      const sortedHours = Object.keys(hoursMap).sort((a, b) => parseInt(a) - parseInt(b));
+
+      return {
+        hLabels: sortedHours.map(h => `${h}:00`),
+        hValues: sortedHours.map(h => hoursMap[h]),
+        areaLabels: Object.keys(areaMap),
+        areaValues: Object.values(areaMap)
+      };
+    }
+
+    function updateDashboard() {
+      const data = processData();
+
+      if (rushChartObj) {
+        rushChartObj.data.labels = data.hLabels;
+        rushChartObj.data.datasets[0].data = data.hValues;
+        rushChartObj.update();
+      } else {
+        const ctx = document.getElementById('rushChart').getContext('2d');
+        rushChartObj = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: data.hLabels,
+            datasets: [{ label: 'Items Sold', data: data.hValues, backgroundColor: '#0284c7' }]
+          },
+          options: { responsive: true, maintainAspectRatio: false }
+        });
+      }
+
+      if (areaChartObj) {
+        areaChartObj.data.labels = data.areaLabels;
+        areaChartObj.data.datasets[0].data = data.areaValues;
+        areaChartObj.update();
+      } else {
+        const ctx = document.getElementById('areaChart').getContext('2d');
+        areaChartObj = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: data.areaLabels,
+            datasets: [{ label: 'Revenue (₹)', data: data.areaValues, backgroundColor: '#e11d48' }]
+          },
+          options: { responsive: true, maintainAspectRatio: false }
+        });
+      }
+    }
+
+    updateDashboard();
+  </script>
+</body>
+</html>
